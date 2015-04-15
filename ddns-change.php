@@ -10,9 +10,9 @@ require_once('Route53DynDns.php');
 $awsKey = "AWS-KEY";
 $awsId = "AWS-ID";
 $hostedZoneId = "HOSTED-ZONE-ID";
-$hostNameToChangeIp = "HOST-NAME-TO-CHANGE";
+$hostNamesToChangeIp = array ("HOST-NAME-1","HOST-NAME-2", "HOST-NAME-3"];
 
-Route53DynDns::updateIpForHostnameIfChanged($awsKey, $awsId, $hostedZoneId, $hostNameToChangeIp);
+Route53DynDns::updateIpForHostnameIfChanged($awsKey, $awsId, $hostedZoneId, $hostNamesToChangeIp);
 
 ?>
 

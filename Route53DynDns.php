@@ -10,14 +10,14 @@ require_once('r53.php');
 class Route53DynDns {
 
 	private $hostedZoneId = "";
-	private $hostName = "";
+	private $hostNames = array();
 	private $r53;
 
-	private static function setup($awsKey, $awsId, $hostedZone, $host) {
-		global $r53, $hostedZoneId, $hostName;
+	private static function setup($awsKey, $awsId, $hostedZone, $hosts) {
+		global $r53, $hostedZoneId, $hostNames;
 		$r53 = new Route53($awsId, $awsKey);
 		$hostedZoneId = $hostedZone;
-		$hostName = $host;
+		$hostNames = $hosts;
 	}
 
 	private static function getPublicIp() {
@@ -42,44 +42,47 @@ class Route53DynDns {
 	private static function updateIp($hostname, $newIP, $oldIP, $type = 'A', $ttl = 60) {
   		global $r53, $hostedZoneId;
 
-  		$delete = $r53->prepareChange('DELETE', $hostname, $type, $ttl, $oldIP);
-  		$result = $r53->changeResourceRecordSets('/hostedzone/'.$hostedZoneId, $delete);
-  		$create = $r53->prepareChange('CREATE', $hostname, $type, $ttl, $newIP);
-  		$result = $r53->changeResourceRecordSets('/hostedzone/'.$hostedZoneId, $create);
+        $delete = $r53->prepareChange('DELETE', $hostname, $type, $ttl, $oldIP);
+        $result = $r53->changeResourceRecordSets('/hostedzone/'.$hostedZoneId, $delete);
+        $create = $r53->prepareChange('CREATE', $hostname, $type, $ttl, $newIP);
+        $result = $r53->changeResourceRecordSets('/hostedzone/'.$hostedZoneId, $create);
 	}
 
-	public static function updateIpForHostnameIfChanged($awsKey, $awsId, $hostedZoneId, $hostName) {
+	public static function updateIpForHostnameIfChanged($awsKey, $awsId, $hostedZoneId, $hostNames) {
 		global $r53;
 
-		self::setup($awsKey, $awsId, $hostedZoneId, $hostName);
+		self::setup($awsKey, $awsId, $hostedZoneId, $hostNames);
 
-		echo "Setting up change for hosted zone ".$hostedZoneId. " and host ".$hostName. "\n";
+        $newIp = self::getPublicIp();
+        $recordSet = $r53->listResourceRecordSets('/hostedzone/'.$hostedZoneId);
 
-		$recordSet = $r53->listResourceRecordSets('/hostedzone/'.$hostedZoneId);
-		$oldIp = "";
+        foreach ($hostNames as $hostName) {
 
-		for ($i = 0; $i < count($recordSet['ResourceRecordSets']); $i++) {
-  			echo "Checking ".$recordSet['ResourceRecordSets'][$i]['Name']."\n";
-  			if ($recordSet['ResourceRecordSets'][$i]['Name'] == $hostName) {
-				echo "Retrieving data to update ".$recordSet['ResourceRecordSets'][$i]['Name']."\n";
-    			$oldIp = $recordSet['ResourceRecordSets'][$i]['ResourceRecords'][0];
-    			$type  = $recordSet['ResourceRecordSets'][$i]['Type'];
-    			$ttl   = $recordSet['ResourceRecordSets'][$i]['TTL'];
-				break;
-  			}
-  		}
+            echo "Starting checking for changes for hosted zone ".$hostedZoneId. " and hostname ".$hostName. "\n";
 
-		$newIp = self::getPublicIp();
+            $oldIp = "";
 
-		echo "The public IP is: ".$newIp."\n";
-		echo "The old IP is: ".$oldIp."\n";
+            for ($i = 0; $i < count($recordSet['ResourceRecordSets']); $i++) {
 
-		if ($oldIp == $newIp) {
-			echo "No change necessary.";
-		} else {
-  			echo "Updating IP of ".$hostName." from ".$oldIp." to ".$newIp."\n";
-  			self::updateIp($hostName, $newIp, $oldIp, 'A', $ttl);
-			echo "Done.";
-		}
+                echo "Checking ".$recordSet['ResourceRecordSets'][$i]['Name']."\n";
+
+                if ($recordSet['ResourceRecordSets'][$i]['Name'] === $hostName) {
+                    echo "Retrieving data for hostname ".$recordSet['ResourceRecordSets'][$i]['Name']."\n";
+                    $oldIp = $recordSet['ResourceRecordSets'][$i]['ResourceRecords'][0];
+                    $type  = $recordSet['ResourceRecordSets'][$i]['Type'];
+                    $ttl   = $recordSet['ResourceRecordSets'][$i]['TTL'];
+
+                    if ($oldIp == $newIp) {
+                        echo "No change necessary for $hostName.\n";
+                    } else {
+                        echo "Updating IP of ".$hostName." from ".$oldIp." to ".$newIp."\n";
+                        self::updateIp($hostName, $newIp, $oldIp, 'A', $ttl);
+                        echo "IP updated for $hostName.";
+                    }
+
+                    break;
+                }
+            }
+        }
 	}
 }
